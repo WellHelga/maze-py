@@ -39,6 +39,10 @@ class MazeTimeline {
     this.pathCells = new Map();
     this.pathEdges = new Map();
     this.solveStep = 0;
+    // ddistance-based coloring
+    this.distance = 0;
+    this.distanceMap = new Map(); // Map cell key -> distance
+    this.frontier = [];
   }
 
   setStatus(message) {
@@ -129,6 +133,10 @@ class MazeTimeline {
     this.pathCells = new Map();
     this.pathEdges = new Map();
     this.solveStep = 0;
+  // Reset distance-based coloring
+    this.distance = 0;
+    this.distanceMap.clear();
+    this.frontier = [];
     this.draw();
   }
 
@@ -218,10 +226,53 @@ class MazeTimeline {
       }
     } else if (event.phase === "solve") {
       if (event.event === "explore") {
-        this._exploreCell(event.cell, event.parent);
+        // Initialize frontier with start cell
+        if (this.frontier.length === 0 && this.start) {
+          const startKey = this._cellKey(this.start);
+          this.distanceMap.set(startKey, 0);
+          this.frontier = [this.start];
+        }
+        this._exploreCellWithDistance(event.cell, event.parent);
       } else if (event.event === "path" && Array.isArray(event.cells)) {
         this._recordPath(event.cells);
       }
+    }
+  }
+  _exploreCellWithDistance(cell, parent) {
+    if (!Array.isArray(cell)) return;
+    
+    const cellKey = this._cellKey(cell);
+    
+    // Calculate Manhattan distance from start
+    let distance = 0;
+    if (this.start) {
+      distance = Math.abs(cell[0] - this.start[0]) + Math.abs(cell[1] - this.start[1]);
+    }
+    
+    // Store the distance
+    this.distanceMap.set(cellKey, distance);
+    
+    // Update the distance counter for color cycling
+    if (distance > this.distance) {
+      this.distance = distance;
+    }
+    
+    const color = this._exploreColor(distance);
+    
+    // Store in explored cells
+    this.exploredCells.set(cellKey, {
+      coords: this._clone(cell),
+      color,
+    });
+    
+    // Store edge if there's a parent
+    if (Array.isArray(parent)) {
+      const edgeKey = this._edgeKey(cell, parent);
+      this.exploredEdges.set(edgeKey, {
+        from: this._clone(cell),
+        to: this._clone(parent),
+        color,
+      });
     }
   }
 
@@ -417,9 +468,17 @@ class MazeTimeline {
     }
   }
 
-  _exploreColor(step) {
-    const hue = (step * 11) % 360;
-    return `hsl(${hue}, 92%, 60%)`;
+  _exploreColor(distance) {
+    // Hue encodes Manhattan distance (cycling through 360 degrees)
+    // You can adjust the multiplier to control color change speed
+    const hue = (distance * 10) % 360;
+    
+    // Fixed saturation and lightness for similar appearance to the example
+    // You can adjust these values as needed
+    const saturation = 1;      // 0-1
+    const lightness = 0.5;     // 0-1
+    
+    return `hsl(${hue}, ${saturation * 100}%, ${lightness * 100}%)`;
   }
 
   _cellKey(coords) {
